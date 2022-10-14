@@ -1,0 +1,21 @@
+# Minimum Mips Emulator
+
+## Support instruction
+
+- NAME (OPCODE/FUNCT)
+
+### R instruction 
+- Jump Register (0x0/0x08)
+- Add Unsigned (0x0/0x21)
+- Sub Unsigned (0x0/0x23)
+- And (0x0/0x24)
+- Or (0x0, 0x25)
+- System Call (0x0/0xc)
+
+### I instruction
+- Add Immediate (0x8/0x0)
+- Add Immediate Unsigned (0x9/0x0)
+- Load Word (0x23/0x0)
+- Store Word (0x2b/0x0)
+
+### J instruction
