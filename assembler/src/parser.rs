@@ -184,15 +184,24 @@ pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
     )(i)
 }
 
-pub fn parse(mut i: &str) -> Vec<Instruction> {
+pub fn parse(input: &str) -> Result<Vec<Instruction>, String> {
     let mut tokens = Vec::new();
 
-    while let Ok((rest, instr)) = one_parse(i) {
-        tokens.push(instr);
-        i = rest;
+    let mut i = input;
+
+    while i.len() > 0 {
+        if let Ok((rest, instr)) = one_parse(i) {
+            tokens.push(instr);
+            i = rest;
+        } else {
+            let cursor = input.len() - i.len();
+            let line_number = input[..cursor].chars().filter(|c| c == &'\n').count();
+
+            return Err(format!("Line: {}", line_number));
+        }
     }
 
-    tokens
+    Ok(tokens)
 }
 
 #[test]

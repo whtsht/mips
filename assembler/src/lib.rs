@@ -60,7 +60,7 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     let mut input = File::open(input)?;
     input.read_to_string(&mut source)?;
 
-    let tokens = parse(&source);
+    let tokens = parse(&source)?;
     let symbol_table = gen_symbol_table(&tokens);
 
     for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
@@ -83,7 +83,7 @@ pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
     let mut source = String::new();
     input.read_to_string(&mut source)?;
 
-    let tokens = parse(&source);
+    let tokens = parse(&source)?;
     let symbol_table = gen_symbol_table(&tokens);
 
     for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
