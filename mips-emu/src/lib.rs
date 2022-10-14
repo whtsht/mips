@@ -32,4 +32,5 @@ pub struct Emulator {
     pub register: Register,
     pub memory: Vec<Binary>,
     pub pc: Binary,
+    pub stdout_history: String,
 }

@@ -38,6 +38,26 @@ pub enum Instruction {
     },
 }
 
+pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
+    endian: Endian,
+    input: P,
+) -> AResult<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut source = String::new();
+    let mut input = File::open(input)?;
+    input.read_to_string(&mut source)?;
+
+    let tokens = parse(&source);
+
+    for code in tokens.iter().map(|t| t.code()) {
+        match endian {
+            Endian::Big => output.write_all(&code.to_be_bytes())?,
+            Endian::Little => output.write_all(&code.to_le_bytes())?,
+        }
+    }
+    Ok(output)
+}
+
 pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
     endian: Endian,
     input: P,

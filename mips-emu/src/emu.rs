@@ -15,12 +15,9 @@ impl Emulator {
         Self {
             register: Register::new(),
             memory: vec![0; MEMORY_SIZE],
+            stdout_history: String::new(),
             pc: 0,
         }
-    }
-
-    pub fn clear_memory(&mut self) {
-        self.memory.iter_mut().for_each(|m| *m = 0);
     }
 
     pub fn load_program<P: AsRef<Path>>(
@@ -41,13 +38,30 @@ impl Emulator {
         }
 
         // Entry point
-        self.pc = self.memory[0];
+        self.pc = 0;
 
         Ok(())
     }
 
-    pub fn init(&mut self) {
+    pub fn load_from_u8(&mut self, input: &Vec<u8>, endian: Endian) -> Result<(), std::io::Error> {
+        for (idx, buf) in input.chunks(4).enumerate() {
+            match endian {
+                Endian::Little => self.memory[idx] = as_i32_le(buf),
+                Endian::Big => self.memory[idx] = as_i32_be(buf),
+            }
+        }
+
+        // Entry point
         self.pc = 0;
+
+        Ok(())
+    }
+
+    pub fn clear_memory(&mut self) {
+        self.memory.iter_mut().for_each(|m| *m = 0);
+    }
+
+    pub fn clear_register(&mut self) {
         self.register.reset();
     }
 
@@ -55,7 +69,9 @@ impl Emulator {
         let v0 = self.register.get(Register::V0);
         if v0 == 1 {
             let a0 = self.register.get(Register::A0);
+
             println!("{}", a0);
+            self.stdout_history.push_str(&format!("{}", a0));
         }
     }
 
@@ -91,13 +107,10 @@ impl Emulator {
     }
 
     pub fn run(&mut self) {
-        self.init();
-
         loop {
             self.step();
-
             if self.pc == 0 {
-                break;
+                return;
             }
         }
     }
