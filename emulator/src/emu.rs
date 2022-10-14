@@ -1,5 +1,6 @@
 use crate::as_i32_be;
 use crate::as_i32_le;
+use crate::decode::JI;
 use crate::decode::{II, RI};
 use crate::Binary;
 use crate::Emulator;
@@ -65,36 +66,38 @@ impl Emulator {
         self.register.reset();
     }
 
-    pub fn syscall(&mut self) {
+    pub fn syscall(&mut self) -> bool {
         let v0 = self.register.get(Register::V0);
         if v0 == 1 {
             let a0 = self.register.get(Register::A0);
 
             println!("{}", a0);
             self.stdout_history.push_str(&format!("{}", a0));
+            return true;
         }
+
+        false
     }
 
     pub fn step(&mut self) {
         let code = self.memory[self.pc as usize];
-        if code >> 26 == 0x0 {
-            let ri = RI::decode(code);
-            if ri.fc == 0x8 {
-                self.pc = self.register.get(ri.rs);
-                return;
-            }
 
-            if ri.fc == 0xc {
-                self.syscall();
-                self.pc += 1;
-                return;
-            }
+        // For debug
+        println!("{}: {:032b}", self.pc, code);
 
-            let ri = RI::decode(code);
-            if arithmetic_with_register(&mut self.register, &ri) {
-                self.pc += 1;
-                return;
-            }
+        if let Some(pc) = jump_instruction(&mut self.register, code) {
+            self.pc = pc;
+            return;
+        }
+
+        if self.syscall() {
+            self.pc += 1;
+            return;
+        }
+
+        if arithmetic_with_register(&mut self.register, code) {
+            self.pc += 1;
+            return;
         }
 
         if arithmetic_with_immediate(&mut self.register, code) {
@@ -122,7 +125,32 @@ impl Emulator {
     }
 }
 
-pub fn arithmetic_with_register(register: &mut Register, i: &RI) -> bool {
+pub fn opcode(code: Binary) -> Binary {
+    code >> 26
+}
+
+pub fn funct(code: Binary) -> Binary {
+    code & 000000_00000_00000_00000_00000_111111
+}
+
+pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary> {
+    let opcode = opcode(code);
+    if opcode == 0x0 {
+        let ri = RI::decode(code);
+
+        if ri.fc == 0x8 {
+            let pc = register.get(ri.rs);
+            return Some(pc);
+        }
+    } else if opcode == 0x2 {
+        let ji = JI::decode(code);
+        return Some(ji.ad);
+    }
+    None
+}
+
+pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
+    let i = RI::decode(code);
     match i.fc {
         // Add Unsigned
         0x21 => {

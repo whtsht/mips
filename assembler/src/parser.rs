@@ -1,5 +1,7 @@
 use crate::Binary;
 use crate::Instruction;
+use crate::Operand;
+use crate::Operation;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while;
@@ -68,57 +70,70 @@ fn binary_from_name(i: &str) -> IResult<&str, Binary> {
     })(i)
 }
 
-fn r(i: &str) -> IResult<&str, Binary> {
-    preceded(
-        tuple((sp, tag("$"))),
-        alt((binary_from_number, binary_from_name)),
-    )(i)
+pub fn label(i: &str) -> IResult<&str, Operand> {
+    map(string, |s| Operand::Label(s))(i)
 }
 
-fn rc(i: &str) -> IResult<&str, Binary> {
-    preceded(
-        comma,
+fn operand(i: &str) -> IResult<&str, Operand> {
+    let rgt = map(
         preceded(tag("$"), alt((binary_from_number, binary_from_name))),
-    )(i)
+        |b| Operand::Register(b),
+    );
+    preceded(sp, alt((rgt, label)))(i)
 }
 
-fn r2im(i: &str) -> IResult<&str, (Binary, Binary, Binary)> {
-    let (i, rs) = r(i)?;
-    let (i, rt) = rc(i)?;
+fn c_operand(i: &str) -> IResult<&str, Operand> {
+    preceded(comma, operand)(i)
+}
+
+fn op2im(i: &str) -> IResult<&str, (Operand, Operand, Binary)> {
+    let (i, rs) = operand(i)?;
+    let (i, rt) = c_operand(i)?;
     let (i, im) = preceded(comma, binary_from_number)(i)?;
 
     return Ok((i, (rs, rt, im)));
 }
 
-fn r3(i: &str) -> IResult<&str, (Binary, Binary, Binary)> {
-    tuple((r, rc, rc))(i)
+fn op3(i: &str) -> IResult<&str, (Operand, Operand, Operand)> {
+    tuple((operand, c_operand, c_operand))(i)
 }
 
 fn jump_instruction(i: &str) -> IResult<&str, Instruction> {
-    let (i, _) = tag("jr")(i)?;
-    let (i, rs) = r(i)?;
-    Ok((i, Instruction::ri(0x0, rs, 0x0, 0x0, 0x0, 0x8)))
+    let j = map(tuple((tag("j"), preceded(sp, label))), |(_, ad)| {
+        Instruction::ji(Operation(0x2), ad)
+    });
+    let jr = map(tuple((tag("jr"), operand)), |(_, rs)| {
+        Instruction::ri(
+            Operation(0x0),
+            rs,
+            Operand::Register(0x0),
+            Operand::Register(0x0),
+            0x0,
+            0x8,
+        )
+    });
+    alt((jr, j))(i)
 }
 
 fn memory_instruction(i: &str) -> IResult<&str, Instruction> {
     use nom::character::complete::char;
-    let lw = map(tag("lw"), |_| 0x23);
-    let sw = map(tag("sw"), |_| 0x2b);
+    let lw = map(tag("lw"), |_| Operation(0x23));
+    let sw = map(tag("sw"), |_| Operation(0x2b));
 
     let (i, op) = alt((lw, sw))(i)?;
-    let (i, rt) = r(i)?;
+    let (i, rt) = operand(i)?;
     let (i, im) = preceded(comma, binary_from_number)(i)?;
-    let (i, rs) = preceded(char('('), terminated(r, char(')')))(i)?;
+    let (i, rs) = preceded(char('('), terminated(operand, char(')')))(i)?;
 
     Ok((i, Instruction::ii(op, rs, rt, im)))
 }
 
 fn arithmetic_with_immediate(i: &str) -> IResult<&str, Instruction> {
-    let addi = map(tag("addi"), |_| 0x8);
-    let addiu = map(tag("addiu"), |_| 0x9);
+    let addi = map(tag("addi"), |_| Operation(0x8));
+    let addiu = map(tag("addiu"), |_| Operation(0x9));
 
     let (i, op) = alt((addi, addiu))(i)?;
-    let (i, (rt, rs, im)) = r2im(i)?;
+    let (i, (rt, rs, im)) = op2im(i)?;
     Ok((i, Instruction::ii(op, rs, rt, im)))
 }
 
@@ -129,20 +144,36 @@ fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
     let or = map(tag("or"), |_| 0x25);
 
     let (i, fc) = alt((addu, subu, and, or))(i)?;
-    let (i, (rd, rs, rt)) = r3(i)?;
-    Ok((i, Instruction::ri(0x0, rs, rt, rd, 0x0, fc)))
+    let (i, (rd, rs, rt)) = op3(i)?;
+    Ok((i, Instruction::ri(Operation(0x0), rs, rt, rd, 0x0, fc)))
 }
 
-//fn label(i: &str) -> IResult<&str, &str> {}
+fn syscall(i: &str) -> IResult<&str, Instruction> {
+    map(tag("syscall"), |_| {
+        Instruction::ri(
+            Operation(0),
+            Operand::Register(0x0),
+            Operand::Register(0x0),
+            Operand::Register(0x0),
+            0,
+            0xc,
+        )
+    })(i)
+}
+
+fn def_label(i: &str) -> IResult<&str, Instruction> {
+    map(terminated(string, tag(":")), |s| Instruction::LabelDef {
+        name: s,
+    })(i)
+}
 
 pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
-    let syscall = map(tag("syscall"), |_| Instruction::ri(0, 0, 0, 0, 0, 0xc));
-
     preceded(
         sp,
         terminated(
             nom::branch::alt((
                 syscall,
+                def_label,
                 memory_instruction,
                 jump_instruction,
                 arithmetic_with_immediate,
@@ -155,23 +186,8 @@ pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
 
 pub fn parse(mut i: &str) -> Vec<Instruction> {
     let mut tokens = Vec::new();
-    let syscall = map(tag("syscall"), |_| Instruction::ri(0, 0, 0, 0, 0, 0xc));
 
-    let mut parser = preceded(
-        sp,
-        terminated(
-            nom::branch::alt((
-                syscall,
-                memory_instruction,
-                jump_instruction,
-                arithmetic_with_immediate,
-                arithmetic_with_register,
-            )),
-            sp,
-        ),
-    );
-
-    while let Ok((rest, instr)) = parser(i) {
+    while let Ok((rest, instr)) = one_parse(i) {
         tokens.push(instr);
         i = rest;
     }
@@ -179,40 +195,71 @@ pub fn parse(mut i: &str) -> Vec<Instruction> {
     tokens
 }
 
-fn _p(i: &str) -> IResult<&str, &str> {
-    tag("abc")(i)
-}
-///1001010
-
 #[test]
-fn test_parse() {
+fn test_one_parse() {
     let input = "addi $1, $2, -10";
     assert_eq!(
         one_parse(input),
-        Ok(("", Instruction::ii(0x8, 0x2, 0x1, (u32::MAX - 9) as i32)))
+        Ok((
+            "",
+            Instruction::ii(
+                Operation(0x8),
+                Operand::Register(0x2),
+                Operand::Register(0x1),
+                (u32::MAX - 9) as i32
+            )
+        ))
     );
 
-    let input = "addu $3, $5, $2";
+    let input = "jr $ra";
     assert_eq!(
         one_parse(input),
-        Ok(("", Instruction::ri(0x0, 0x5, 0x2, 0x3, 0x0, 0x21)))
+        Ok((
+            "",
+            Instruction::ri(
+                Operation(0x0),
+                Operand::Register(31),
+                Operand::Register(0x0),
+                Operand::Register(0x0),
+                0x0,
+                0x8,
+            )
+        ))
     );
 
-    let input = "or $10, $11, $12";
-    assert_eq!(
-        one_parse(input),
-        Ok(("", Instruction::ri(0x0, 0xb, 0xc, 0xa, 0x0, 0x25)))
-    );
+    // let input = "addu $3, $5, $2";
+    // assert_eq!(
+    //     one_parse(input),
+    //     Ok(("", Token::ri(0x0, 0x5, 0x2, 0x3, 0x0, 0x21)))
+    // );
 
-    let input = "and $t0, $t1, $t2";
-    assert_eq!(
-        one_parse(input),
-        Ok(("", Instruction::ri(0x0, 0x9, 0xa, 0x8, 0x0, 0x24)))
-    );
+    // let input = "or $10, $11, $12";
+    // assert_eq!(
+    //     one_parse(input),
+    //     Ok(("", Token::ri(0x0, 0xb, 0xc, 0xa, 0x0, 0x25)))
+    // );
 
-    let input = "lw $t0, 400($t1)";
-    assert_eq!(
-        one_parse(input),
-        Ok(("", Instruction::ii(0x23, 0x9, 0x8, 400)))
-    );
+    // let input = "and $t0, $t1, $t2";
+    // assert_eq!(
+    //     one_parse(input),
+    //     Ok(("", Token::ri(0x0, 0x9, 0xa, 0x8, 0x0, 0x24)))
+    // );
+
+    // let input = "lw $t0, 400($t1)";
+    // assert_eq!(one_parse(input), Ok(("", Token::ii(0x23, 0x9, 0x8, 400))));
+}
+
+#[test]
+fn test_parse() {
+    let input = r#"j L
+addi $t0, $0, 34
+
+L:
+addi $t0, $0, -34
+
+addi $v0, $0, 1
+syscall
+jr $ra"#;
+
+    println!("{:?}", parse(input));
 }

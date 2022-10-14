@@ -6,9 +6,10 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use instruction::gen_symbol_table;
 use parser::parse;
 
-pub type AResult<T> = Result<T, Box<dyn Error>>;
+pub type BResult<T> = Result<T, Box<dyn Error>>;
 pub type Binary = i32;
 
 pub enum Endian {
@@ -17,39 +18,52 @@ pub enum Endian {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Instruction {
+pub enum Operand<'a> {
+    Register(Binary),
+    Label(&'a str),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Operation(Binary);
+
+#[derive(Debug, PartialEq)]
+pub enum Instruction<'a> {
     I {
-        op: Binary,
-        rs: Binary,
-        rt: Binary,
+        op: Operation,
+        rs: Operand<'a>,
+        rt: Operand<'a>,
         im: Binary,
     },
     R {
-        op: Binary,
-        rs: Binary,
-        rt: Binary,
-        rd: Binary,
+        op: Operation,
+        rs: Operand<'a>,
+        rt: Operand<'a>,
+        rd: Operand<'a>,
         sh: Binary,
         fc: Binary,
     },
     J {
-        op: Binary,
-        ad: Binary,
+        op: Operation,
+        ad: Operand<'a>,
+    },
+    LabelDef {
+        name: &'a str,
     },
 }
 
 pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     endian: Endian,
     input: P,
-) -> AResult<Vec<u8>> {
+) -> BResult<Vec<u8>> {
     let mut output = Vec::new();
     let mut source = String::new();
     let mut input = File::open(input)?;
     input.read_to_string(&mut source)?;
 
     let tokens = parse(&source);
+    let symbol_table = gen_symbol_table(&tokens);
 
-    for code in tokens.iter().map(|t| t.code()) {
+    for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
         match endian {
             Endian::Big => output.write_all(&code.to_be_bytes())?,
             Endian::Little => output.write_all(&code.to_le_bytes())?,
@@ -62,7 +76,7 @@ pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
     endian: Endian,
     input: P,
     output: P,
-) -> AResult<()> {
+) -> BResult<()> {
     let mut input =
         File::open(&input).or_else(|_| Err(format!("A file named {} was not found", input)))?;
     let mut output = File::create(output)?;
@@ -70,8 +84,9 @@ pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
     input.read_to_string(&mut source)?;
 
     let tokens = parse(&source);
+    let symbol_table = gen_symbol_table(&tokens);
 
-    for code in tokens.iter().map(|t| t.code()) {
+    for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
         match endian {
             Endian::Big => output.write_all(&code.to_be_bytes())?,
             Endian::Little => output.write_all(&code.to_le_bytes())?,

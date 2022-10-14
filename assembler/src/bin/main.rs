@@ -1,5 +1,5 @@
 use clap::Parser;
-use mips_assembler::{assemble, AResult, Endian};
+use mips_assembler::{assemble, BResult, Endian};
 
 #[derive(Debug, Parser)]
 #[clap(name = "mimi", version = "v1.0.0", about = "Minimum mips assembler")]
@@ -18,7 +18,7 @@ struct Args {
     output: String,
 }
 
-fn main() -> AResult<()> {
+fn main() -> BResult<()> {
     let args = Args::parse();
     assemble(
         if args.be { Endian::Big } else { Endian::Little },
