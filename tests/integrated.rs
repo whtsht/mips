@@ -15,4 +15,5 @@ fn assert(fname: &str, expect: &str) {
 fn test() {
     assert("./tests/case1.s", "5");
     assert("./tests/case2.s", "-34");
+    assert("./tests/case3.s", "0123456789");
 }

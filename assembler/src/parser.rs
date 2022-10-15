@@ -28,7 +28,7 @@ fn string(i: &str) -> IResult<&str, &str> {
     take_while(move |c: char| is_alphabetic(c as u8) || ('0' <= c && c <= '9'))(i)
 }
 
-fn binary_from_number(input: &str) -> IResult<&str, Binary> {
+fn number(input: &str) -> IResult<&str, Binary> {
     map(double, |n| n as Binary)(input)
 }
 
@@ -75,27 +75,38 @@ pub fn label(i: &str) -> IResult<&str, Operand> {
 }
 
 fn operand(i: &str) -> IResult<&str, Operand> {
-    let rgt = map(
-        preceded(tag("$"), alt((binary_from_number, binary_from_name))),
-        |b| Operand::Register(b),
-    );
-    preceded(sp, alt((rgt, label)))(i)
+    let rgt = map(preceded(tag("$"), alt((number, binary_from_name))), |b| {
+        Operand::Register(b)
+    });
+    let constant = map(number, |n| Operand::Constant(n));
+    preceded(sp, alt((rgt, constant, label)))(i)
 }
 
 fn c_operand(i: &str) -> IResult<&str, Operand> {
     preceded(comma, operand)(i)
 }
 
-fn op2im(i: &str) -> IResult<&str, (Operand, Operand, Binary)> {
+fn op2im(i: &str) -> IResult<&str, (Operand, Operand, Operand)> {
     let (i, rs) = operand(i)?;
     let (i, rt) = c_operand(i)?;
-    let (i, im) = preceded(comma, binary_from_number)(i)?;
+    let (i, im) = preceded(comma, operand)(i)?;
 
     return Ok((i, (rs, rt, im)));
 }
 
 fn op3(i: &str) -> IResult<&str, (Operand, Operand, Operand)> {
     tuple((operand, c_operand, c_operand))(i)
+}
+
+fn branch_instruction(i: &str) -> IResult<&str, Instruction> {
+    let beq = map(tuple((tag("beq"), op2im)), |(_, (rs, rt, im))| {
+        Instruction::ii(Operation(0x4), rs, rt, im)
+    });
+    let bne = map(tuple((tag("bne"), op2im)), |(_, (rs, rt, im))| {
+        Instruction::ii(Operation(0x5), rs, rt, im)
+    });
+
+    alt((beq, bne))(i)
 }
 
 fn jump_instruction(i: &str) -> IResult<&str, Instruction> {
@@ -122,7 +133,7 @@ fn memory_instruction(i: &str) -> IResult<&str, Instruction> {
 
     let (i, op) = alt((lw, sw))(i)?;
     let (i, rt) = operand(i)?;
-    let (i, im) = preceded(comma, binary_from_number)(i)?;
+    let (i, im) = preceded(comma, operand)(i)?;
     let (i, rs) = preceded(char('('), terminated(operand, char(')')))(i)?;
 
     Ok((i, Instruction::ii(op, rs, rt, im)))
@@ -174,6 +185,7 @@ pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
             nom::branch::alt((
                 syscall,
                 def_label,
+                branch_instruction,
                 memory_instruction,
                 jump_instruction,
                 arithmetic_with_immediate,
@@ -197,7 +209,7 @@ pub fn parse(input: &str) -> Result<Vec<Instruction>, String> {
             let cursor = input.len() - i.len();
             let line_number = input[..cursor].chars().filter(|c| c == &'\n').count();
 
-            return Err(format!("Line: {}", line_number));
+            return Err(format!("Line: {} {}", line_number - 1, &input[cursor..]));
         }
     }
 
@@ -215,7 +227,7 @@ fn test_one_parse() {
                 Operation(0x8),
                 Operand::Register(0x2),
                 Operand::Register(0x1),
-                (u32::MAX - 9) as i32
+                Operand::Constant(-10)
             )
         ))
     );
@@ -261,14 +273,18 @@ fn test_one_parse() {
 #[test]
 fn test_parse() {
     let input = r#"j L
-addi $t0, $0, 34
+
+addi $a0, $0, 34
 
 L:
-addi $t0, $0, -34
+addi $a0, $0, -34
 
 addi $v0, $0, 1
 syscall
-jr $ra"#;
+jr $ra
+"#;
 
-    println!("{:?}", parse(input));
+    let o = parse(input).unwrap();
+    assert_eq!(o.len(), 7);
+    assert_eq!(o[2], Instruction::LabelDef { name: "L" });
 }

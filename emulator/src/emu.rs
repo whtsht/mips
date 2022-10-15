@@ -84,13 +84,20 @@ impl Emulator {
 
         // For debug
         println!("{}: {:032b}", self.pc, code);
-
-        if let Some(pc) = jump_instruction(&mut self.register, code) {
-            self.pc = pc;
+        if arithmetic_with_immediate(&mut self.register, code) {
+            self.pc += 1;
             return;
         }
 
-        if self.syscall() {
+        if let Some(jd) = jump_instruction(&mut self.register, code) {
+            match jd {
+                JumpDest::Spec(pc) => self.pc = pc,
+                JumpDest::Next => self.pc += 1,
+            }
+            return;
+        }
+
+        if funct(code) == 0xc && self.syscall() {
             self.pc += 1;
             return;
         }
@@ -99,12 +106,6 @@ impl Emulator {
             self.pc += 1;
             return;
         }
-
-        if arithmetic_with_immediate(&mut self.register, code) {
-            self.pc += 1;
-            return;
-        }
-
         println!("failed to decode a instruction [PC = {}]", self.pc);
         std::process::exit(1);
     }
@@ -130,21 +131,42 @@ pub fn opcode(code: Binary) -> Binary {
 }
 
 pub fn funct(code: Binary) -> Binary {
-    code & 000000_00000_00000_00000_00000_111111
+    code & 0b000000_00000_00000_00000_00000_111111
 }
 
-pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary> {
+pub enum JumpDest {
+    Next,
+    Spec(Binary),
+}
+
+pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<JumpDest> {
     let opcode = opcode(code);
     if opcode == 0x0 {
         let ri = RI::decode(code);
 
         if ri.fc == 0x8 {
             let pc = register.get(ri.rs);
-            return Some(pc);
+            return Some(JumpDest::Spec(pc));
         }
     } else if opcode == 0x2 {
         let ji = JI::decode(code);
-        return Some(ji.ad);
+        return Some(JumpDest::Spec(ji.ad));
+    } else if opcode == 0x4 {
+        let ii = II::decode(code);
+
+        if register.get(ii.rs) == register.get(ii.rt) {
+            return Some(JumpDest::Spec(ii.im));
+        } else {
+            return Some(JumpDest::Next);
+        }
+    } else if opcode == 0x5 {
+        let ii = II::decode(code);
+
+        if register.get(ii.rs) != register.get(ii.rt) {
+            return Some(JumpDest::Spec(ii.im));
+        } else {
+            return Some(JumpDest::Next);
+        }
     }
     None
 }
@@ -185,7 +207,7 @@ pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
 }
 
 pub fn arithmetic_with_immediate(register: &mut Register, code: Binary) -> bool {
-    match code >> 26 {
+    match opcode(code) {
         // Add Immediate
         0x8 => {
             let ii = II::decode(code);

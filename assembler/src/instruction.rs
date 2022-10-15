@@ -16,6 +16,7 @@ impl<'a> Operand<'a> {
                     panic!("Label {} is not defined", name);
                 }
             }
+            Operand::Constant(b) => *b,
         }
     }
 }
@@ -43,7 +44,7 @@ pub fn gen_symbol_table<'a>(tokens: &'a Vec<Instruction>) -> HashMap<&'a str, Bi
 }
 
 impl<'a> Instruction<'a> {
-    pub fn ii(op: Operation, rs: Operand<'a>, rt: Operand<'a>, im: Binary) -> Self {
+    pub fn ii(op: Operation, rs: Operand<'a>, rt: Operand<'a>, im: Operand<'a>) -> Self {
         Self::I { op, rs, rt, im }
     }
 
@@ -76,7 +77,7 @@ impl<'a> Instruction<'a> {
                 code |= op.to_binary() << 26;
                 code |= rs.to_binary(symbol_table) << 21;
                 code |= rt.to_binary(symbol_table) << 16;
-                code |= 0b000000_00000_00000_11111_11111_111111 & im;
+                code |= 0b000000_00000_00000_11111_11111_111111 & im.to_binary(symbol_table);
             }
             Instruction::R {
                 op,

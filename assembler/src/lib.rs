@@ -21,6 +21,7 @@ pub enum Endian {
 pub enum Operand<'a> {
     Register(Binary),
     Label(&'a str),
+    Constant(Binary),
 }
 
 #[derive(Debug, PartialEq)]
@@ -32,7 +33,7 @@ pub enum Instruction<'a> {
         op: Operation,
         rs: Operand<'a>,
         rt: Operand<'a>,
-        im: Binary,
+        im: Operand<'a>,
     },
     R {
         op: Operation,
