@@ -1,15 +1,8 @@
 [package]
-name = "mips-assembler"
+name = "mips-compiler"
 version = "0.1.0"
 edition = "2021"
-default-run = "mma"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nom = "7"
-clap = { version = "4", features = ["derive"] }
-
-[[bin]]
-name = "mma"
-path = "src/bin/main.rs"

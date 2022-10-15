@@ -40,8 +40,8 @@ pub enum Instruction<'a> {
         rs: Operand<'a>,
         rt: Operand<'a>,
         rd: Operand<'a>,
-        sh: Binary,
-        fc: Binary,
+        sh: Operand<'a>,
+        fc: Operand<'a>,
     },
     J {
         op: Operation,

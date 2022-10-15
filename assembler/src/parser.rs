@@ -119,8 +119,8 @@ fn jump_instruction(i: &str) -> IResult<&str, Instruction> {
             rs,
             Operand::Register(0x0),
             Operand::Register(0x0),
-            0x0,
-            0x8,
+            Operand::Constant(0x0),
+            Operand::Constant(0x8),
         )
     });
     alt((jr, j))(i)
@@ -154,9 +154,12 @@ fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
     let and = map(tag("and"), |_| 0x24);
     let or = map(tag("or"), |_| 0x25);
 
-    let (i, fc) = alt((addu, subu, and, or))(i)?;
+    let (i, fc) = map(alt((addu, subu, and, or)), |n| Operand::Constant(n))(i)?;
     let (i, (rd, rs, rt)) = op3(i)?;
-    Ok((i, Instruction::ri(Operation(0x0), rs, rt, rd, 0x0, fc)))
+    Ok((
+        i,
+        Instruction::ri(Operation(0x0), rs, rt, rd, Operand::Constant(0x0), fc),
+    ))
 }
 
 fn syscall(i: &str) -> IResult<&str, Instruction> {
@@ -166,8 +169,8 @@ fn syscall(i: &str) -> IResult<&str, Instruction> {
             Operand::Register(0x0),
             Operand::Register(0x0),
             Operand::Register(0x0),
-            0,
-            0xc,
+            Operand::Constant(0x0),
+            Operand::Constant(0xc),
         )
     })(i)
 }
@@ -242,8 +245,8 @@ fn test_one_parse() {
                 Operand::Register(31),
                 Operand::Register(0x0),
                 Operand::Register(0x0),
-                0x0,
-                0x8,
+                Operand::Constant(0x0),
+                Operand::Constant(0x8),
             )
         ))
     );

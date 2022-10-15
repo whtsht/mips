@@ -53,8 +53,8 @@ impl<'a> Instruction<'a> {
         rs: Operand<'a>,
         rt: Operand<'a>,
         rd: Operand<'a>,
-        sh: Binary,
-        fc: Binary,
+        sh: Operand<'a>,
+        fc: Operand<'a>,
     ) -> Self {
         Self::R {
             op,
@@ -91,8 +91,8 @@ impl<'a> Instruction<'a> {
                 code |= rs.to_binary(symbol_table) << 21;
                 code |= rt.to_binary(symbol_table) << 16;
                 code |= rd.to_binary(symbol_table) << 11;
-                code |= sh << 6;
-                code |= fc;
+                code |= sh.to_binary(symbol_table) << 6;
+                code |= fc.to_binary(symbol_table);
             }
             Instruction::J { op, ad } => {
                 code |= op.to_binary() << 26;

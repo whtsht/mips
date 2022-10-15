@@ -8,5 +8,8 @@ edition = "2021"
 [dependencies.mips-assembler]
 path = "./assembler"
 
-[dependencies.mips-emu]
+[dependencies.mips-emulator]
 path = "./emulator"
+
+[dependencies.mips-compiler]
+path = "./compiler"
