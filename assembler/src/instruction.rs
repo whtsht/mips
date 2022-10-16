@@ -1,3 +1,4 @@
+use crate::FileHeader;
 use std::collections::HashMap;
 
 use crate::Binary;
@@ -6,12 +7,12 @@ use crate::Operand;
 use crate::Operation;
 
 impl<'a> Operand<'a> {
-    fn to_binary(&self, symbol_table: &HashMap<&str, Binary>) -> Binary {
+    fn to_binary(&self, symbol_table: &HashMap<&str, Binary>, file_header: &FileHeader) -> Binary {
         match self {
             Operand::Register(b) => *b,
             Operand::Label(name) => {
                 if let Some(b) = symbol_table.get(name) {
-                    *b
+                    *b + file_header.start_text
                 } else {
                     panic!("Label {} is not defined", name);
                 }
@@ -70,14 +71,19 @@ impl<'a> Instruction<'a> {
         Self::J { op, ad }
     }
 
-    pub fn code(&self, symbol_table: &HashMap<&str, Binary>) -> Option<Binary> {
+    pub fn code(
+        &self,
+        symbol_table: &HashMap<&str, Binary>,
+        file_header: &FileHeader,
+    ) -> Option<Binary> {
         let mut code = 0;
         match self {
             Instruction::I { op, rs, rt, im } => {
                 code |= op.to_binary() << 26;
-                code |= rs.to_binary(symbol_table) << 21;
-                code |= rt.to_binary(symbol_table) << 16;
-                code |= 0b000000_00000_00000_11111_11111_111111 & im.to_binary(symbol_table);
+                code |= rs.to_binary(symbol_table, file_header) << 21;
+                code |= rt.to_binary(symbol_table, file_header) << 16;
+                code |= 0b000000_00000_00000_11111_11111_111111
+                    & im.to_binary(symbol_table, file_header);
             }
             Instruction::R {
                 op,
@@ -88,15 +94,15 @@ impl<'a> Instruction<'a> {
                 fc,
             } => {
                 code |= op.to_binary() << 26;
-                code |= rs.to_binary(symbol_table) << 21;
-                code |= rt.to_binary(symbol_table) << 16;
-                code |= rd.to_binary(symbol_table) << 11;
-                code |= sh.to_binary(symbol_table) << 6;
-                code |= fc.to_binary(symbol_table);
+                code |= rs.to_binary(symbol_table, file_header) << 21;
+                code |= rt.to_binary(symbol_table, file_header) << 16;
+                code |= rd.to_binary(symbol_table, file_header) << 11;
+                code |= sh.to_binary(symbol_table, file_header) << 6;
+                code |= fc.to_binary(symbol_table, file_header);
             }
             Instruction::J { op, ad } => {
                 code |= op.to_binary() << 26;
-                code |= ad.to_binary(symbol_table);
+                code |= ad.to_binary(symbol_table, file_header);
             }
             Instruction::LabelDef { name: _ } => return None,
         }

@@ -31,15 +31,7 @@ impl Emulator {
 
         input.read_to_end(&mut buffer)?;
 
-        for (idx, buf) in buffer.chunks(4).enumerate() {
-            match endian {
-                Endian::Little => self.memory[idx] = as_i32_le(buf),
-                Endian::Big => self.memory[idx] = as_i32_be(buf),
-            }
-        }
-
-        // Entry point
-        self.pc = 0;
+        self.load_from_u8(&buffer, endian)?;
 
         Ok(())
     }
@@ -53,7 +45,7 @@ impl Emulator {
         }
 
         // Entry point
-        self.pc = 0;
+        self.pc = self.memory[0];
 
         Ok(())
     }
@@ -84,10 +76,6 @@ impl Emulator {
 
         // For debug
         println!("{}: {:032b}", self.pc, code);
-        if arithmetic_with_immediate(&mut self.register, code) {
-            self.pc += 1;
-            return;
-        }
 
         if let Some(jd) = jump_instruction(&mut self.register, code) {
             match jd {
@@ -106,8 +94,13 @@ impl Emulator {
             self.pc += 1;
             return;
         }
-        println!("failed to decode a instruction [PC = {}]", self.pc);
-        std::process::exit(1);
+
+        if arithmetic_with_immediate(&mut self.register, code) {
+            self.pc += 1;
+            return;
+        }
+
+        panic!("failed to decode a instruction [PC = {}]", self.pc);
     }
 
     pub fn run(&mut self) {

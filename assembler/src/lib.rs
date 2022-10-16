@@ -1,3 +1,4 @@
+pub mod header;
 pub mod instruction;
 pub mod parser;
 
@@ -12,9 +13,17 @@ use parser::parse;
 pub type BResult<T> = Result<T, Box<dyn Error>>;
 pub type Binary = i32;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Endian {
     Little,
     Big,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FileHeader {
+    entry_point: Binary,
+    start_text: Binary,
+    start_data: Binary,
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,6 +35,11 @@ pub enum Operand<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Operation(Binary);
+
+#[derive(Debug, PartialEq)]
+pub enum Presudo {
+    Word(Vec<Binary>),
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Instruction<'a> {
@@ -52,6 +66,14 @@ pub enum Instruction<'a> {
     },
 }
 
+fn write_code(endian: Endian, code: Binary, output: &mut Vec<u8>) -> BResult<()> {
+    match endian {
+        Endian::Big => output.write_all(&code.to_be_bytes())?,
+        Endian::Little => output.write_all(&code.to_le_bytes())?,
+    }
+    Ok(())
+}
+
 pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     endian: Endian,
     input: P,
@@ -63,12 +85,15 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
 
     let tokens = parse(&source)?;
     let symbol_table = gen_symbol_table(&tokens);
+    let file_header = FileHeader::new(&tokens);
 
-    for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
-        match endian {
-            Endian::Big => output.write_all(&code.to_be_bytes())?,
-            Endian::Little => output.write_all(&code.to_le_bytes())?,
-        }
+    file_header.write_code(endian, &mut output)?;
+
+    for code in tokens
+        .iter()
+        .filter_map(|t| t.code(&symbol_table, &file_header))
+    {
+        write_code(endian, code, &mut output)?;
     }
     Ok(output)
 }
@@ -78,21 +103,9 @@ pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
     input: P,
     output: P,
 ) -> BResult<()> {
-    let mut input =
-        File::open(&input).or_else(|_| Err(format!("A file named {} was not found", input)))?;
+    let data = assemble_to_u8(endian, input)?;
     let mut output = File::create(output)?;
-    let mut source = String::new();
-    input.read_to_string(&mut source)?;
-
-    let tokens = parse(&source)?;
-    let symbol_table = gen_symbol_table(&tokens);
-
-    for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
-        match endian {
-            Endian::Big => output.write_all(&code.to_be_bytes())?,
-            Endian::Little => output.write_all(&code.to_le_bytes())?,
-        }
-    }
+    output.write_all(&data)?;
 
     Ok(())
 }
