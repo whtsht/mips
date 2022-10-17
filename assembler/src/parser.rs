@@ -107,8 +107,18 @@ fn branch_instruction(i: &str) -> IResult<&str, Instruction> {
     let bne = map(tuple((tag("bne"), op2im)), |(_, (rs, rt, im))| {
         Instruction::ii(Operation(0x5), rs, rt, im)
     });
+    let slt = map(tuple((tag("slt"), op3)), |(_, (rd, rs, rt))| {
+        Instruction::ri(
+            Operation(0x0),
+            rs,
+            rt,
+            rd,
+            Operand::Constant(0x0),
+            Operand::Constant(0x2a),
+        )
+    });
 
-    alt((beq, bne))(i)
+    alt((beq, bne, slt))(i)
 }
 
 fn jump_instruction(i: &str) -> IResult<&str, Instruction> {

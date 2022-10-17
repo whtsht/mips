@@ -19,4 +19,5 @@ fn test() {
     assert("002_label.s", "-34");
     assert("003_loop.s", "0123456789");
     assert("004_data.s", "100");
+    assert("005_slt.s", "0123456789");
 }

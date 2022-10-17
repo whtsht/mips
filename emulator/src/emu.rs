@@ -77,11 +77,16 @@ impl Emulator {
         // For debug
         // println!("{}: {:032b}", self.pc, code);
 
-        if let Some(jd) = jump_instruction(&mut self.register, code) {
+        if let Some(jd) = branch_instruction(&mut self.register, code) {
             match jd {
                 JumpDest::Spec(pc) => self.pc = pc,
                 JumpDest::Next => self.pc += 1,
             }
+            return;
+        }
+
+        if let Some(pc) = jump_instruction(&mut self.register, code) {
+            self.pc = pc;
             return;
         }
 
@@ -137,19 +142,29 @@ pub enum JumpDest {
     Spec(Binary),
 }
 
-pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<JumpDest> {
+pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary> {
     let opcode = opcode(code);
+    // Jump Register
     if opcode == 0x0 {
         let ri = RI::decode(code);
 
         if ri.fc == 0x8 {
             let pc = register.get(ri.rs);
-            return Some(JumpDest::Spec(pc));
+            return Some(pc);
         }
+    // Jump
     } else if opcode == 0x2 {
         let ji = JI::decode(code);
-        return Some(JumpDest::Spec(ji.ad));
-    } else if opcode == 0x4 {
+        return Some(ji.ad);
+        // Branch On Equal
+    }
+    None
+}
+
+fn branch_instruction(register: &mut Register, code: Binary) -> Option<JumpDest> {
+    let opcode = opcode(code);
+    // Branch On Equal
+    if opcode == 0x4 {
         let ii = II::decode(code);
 
         if register.get(ii.rs) == register.get(ii.rt) {
@@ -157,6 +172,7 @@ pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<JumpDes
         } else {
             return Some(JumpDest::Next);
         }
+    // Branch On Not Equal
     } else if opcode == 0x5 {
         let ii = II::decode(code);
 
@@ -198,6 +214,16 @@ pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
             let rs = register.get(i.rs);
             let rt = register.get(i.rt);
             register.set(i.rd, rs | rt);
+            true
+        }
+        // Set Less Than
+        0x2a => {
+            println!("slt rd:{} rs:{} rt:{}", i.rd, i.rs, i.rt);
+            if register.get(i.rs) < register.get(i.rt) {
+                register.set(i.rd, 1);
+            } else {
+                register.set(i.rd, 0);
+            }
             true
         }
         _ => false,
