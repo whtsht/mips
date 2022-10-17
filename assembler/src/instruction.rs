@@ -1,3 +1,6 @@
+use crate::write_code;
+use crate::BResult;
+use crate::Endian;
 use crate::FileHeader;
 use std::collections::HashMap;
 
@@ -5,14 +8,15 @@ use crate::Binary;
 use crate::Instruction;
 use crate::Operand;
 use crate::Operation;
+use crate::SectionType;
 
 impl<'a> Operand<'a> {
-    fn to_binary(&self, symbol_table: &HashMap<&str, Binary>, file_header: &FileHeader) -> Binary {
+    fn to_binary(&self, symbol_table: &HashMap<&str, Binary>) -> Binary {
         match self {
             Operand::Register(b) => *b,
             Operand::Label(name) => {
                 if let Some(b) = symbol_table.get(name) {
-                    *b + file_header.start_text
+                    *b
                 } else {
                     panic!("Label {} is not defined", name);
                 }
@@ -28,19 +32,75 @@ impl Operation {
     }
 }
 
-pub fn gen_symbol_table<'a>(tokens: &'a Vec<Instruction>) -> HashMap<&'a str, Binary> {
+pub fn allocate_data(tokens: &Vec<Instruction>) -> Vec<Binary> {
+    let mut output = Vec::new();
+    for token in tokens.iter() {
+        if let Instruction::Section(SectionType::Word(w)) = token {
+            output.extend(w.iter());
+        }
+    }
+    output
+}
+
+pub fn write_data_section(
+    endian: Endian,
+    codes: &Vec<Binary>,
+    output: &mut Vec<u8>,
+) -> BResult<()> {
+    for code in codes.iter() {
+        write_code(endian, *code, output)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn test_allocate_data() {
+    let tokens = vec![
+        Instruction::Section(SectionType::Word(vec![1, 2, 3])),
+        Instruction::Section(SectionType::Word(vec![100, 200, 300])),
+    ];
+    let b = allocate_data(&tokens);
+    assert_eq!(b, vec![1, 2, 3, 100, 200, 300])
+}
+
+pub fn gen_symbol_table<'a>(
+    tokens: &'a Vec<Instruction>,
+    file_header: &FileHeader,
+) -> HashMap<&'a str, Binary> {
     let mut table = HashMap::new();
-    for (count, token) in tokens.iter().enumerate() {
+    let mut tokens = tokens.iter();
+
+    for (count, token) in tokens
+        .by_ref()
+        .take_while(|t| match t {
+            Instruction::Section(_) => false,
+            _ => true,
+        })
+        .enumerate()
+    {
         match token {
             Instruction::LabelDef { name } => {
                 if table.get(name).is_some() {
                     panic!("Label {} is duplicate", name);
                 }
-                table.insert(*name, count as Binary);
+                table.insert(*name, count as Binary + file_header.start_text);
             }
             _ => {}
         }
     }
+
+    for (count, token) in tokens.enumerate() {
+        match token {
+            Instruction::LabelDef { name } => {
+                if table.get(name).is_some() {
+                    panic!("Label {} is duplicate", name);
+                }
+                table.insert(*name, count as Binary + file_header.start_data);
+            }
+            _ => {}
+        }
+    }
+
     table
 }
 
@@ -71,19 +131,14 @@ impl<'a> Instruction<'a> {
         Self::J { op, ad }
     }
 
-    pub fn code(
-        &self,
-        symbol_table: &HashMap<&str, Binary>,
-        file_header: &FileHeader,
-    ) -> Option<Binary> {
+    pub fn code(&self, symbol_table: &HashMap<&str, Binary>) -> Option<Binary> {
         let mut code = 0;
         match self {
             Instruction::I { op, rs, rt, im } => {
                 code |= op.to_binary() << 26;
-                code |= rs.to_binary(symbol_table, file_header) << 21;
-                code |= rt.to_binary(symbol_table, file_header) << 16;
-                code |= 0b000000_00000_00000_11111_11111_111111
-                    & im.to_binary(symbol_table, file_header);
+                code |= rs.to_binary(symbol_table) << 21;
+                code |= rt.to_binary(symbol_table) << 16;
+                code |= 0b000000_00000_00000_11111_11111_111111 & im.to_binary(symbol_table);
             }
             Instruction::R {
                 op,
@@ -94,17 +149,18 @@ impl<'a> Instruction<'a> {
                 fc,
             } => {
                 code |= op.to_binary() << 26;
-                code |= rs.to_binary(symbol_table, file_header) << 21;
-                code |= rt.to_binary(symbol_table, file_header) << 16;
-                code |= rd.to_binary(symbol_table, file_header) << 11;
-                code |= sh.to_binary(symbol_table, file_header) << 6;
-                code |= fc.to_binary(symbol_table, file_header);
+                code |= rs.to_binary(symbol_table) << 21;
+                code |= rt.to_binary(symbol_table) << 16;
+                code |= rd.to_binary(symbol_table) << 11;
+                code |= sh.to_binary(symbol_table) << 6;
+                code |= fc.to_binary(symbol_table);
             }
             Instruction::J { op, ad } => {
                 code |= op.to_binary() << 26;
-                code |= ad.to_binary(symbol_table, file_header);
+                code |= ad.to_binary(symbol_table);
             }
-            Instruction::LabelDef { name: _ } => return None,
+            Instruction::LabelDef { .. } => return None,
+            Instruction::Section(_) => return None,
         }
         Some(code)
     }

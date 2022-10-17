@@ -2,12 +2,14 @@ use crate::Binary;
 use crate::Instruction;
 use crate::Operand;
 use crate::Operation;
+use crate::SectionType;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while;
 use nom::character::is_alphabetic;
 use nom::combinator::map;
 use nom::combinator::map_opt;
+use nom::multi::separated_list0;
 use nom::number::complete::double;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
@@ -180,12 +182,25 @@ fn def_label(i: &str) -> IResult<&str, Instruction> {
         name: s,
     })(i)
 }
+// .word 1, 2, 3,
+fn section(i: &str) -> IResult<&str, Instruction> {
+    let data = map(tag("data"), |_| Instruction::Section(SectionType::Data));
+    let word = map(
+        preceded(
+            tuple((tag("word"), sp)),
+            separated_list0(preceded(sp, terminated(tag(","), sp)), number),
+        ),
+        |w| Instruction::Section(SectionType::Word(w)),
+    );
+    preceded(tag("."), alt((data, word)))(i)
+}
 
 pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
     preceded(
         sp,
         terminated(
             nom::branch::alt((
+                section,
                 syscall,
                 def_label,
                 branch_instruction,
@@ -249,6 +264,18 @@ fn test_one_parse() {
                 Operand::Constant(0x8),
             )
         ))
+    );
+
+    let input = ".data";
+    assert_eq!(
+        one_parse(input),
+        Ok(("", Instruction::Section(SectionType::Data)))
+    );
+
+    let input = ".word 1, 2, 3";
+    assert_eq!(
+        one_parse(input),
+        Ok(("", Instruction::Section(SectionType::Word(vec![1, 2, 3]))))
     );
 
     // let input = "addu $3, $5, $2";

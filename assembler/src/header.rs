@@ -9,7 +9,14 @@ impl FileHeader {
     pub fn new(tokens: &Vec<Instruction>) -> Self {
         let entry_point = 3;
         let start_text = 3;
-        let start_data = tokens.len() as Binary + 3;
+        let start_data = tokens
+            .iter()
+            .filter(|t| match t {
+                Instruction::I { .. } | Instruction::R { .. } | Instruction::J { .. } => true,
+                _ => false,
+            })
+            .count() as Binary
+            + 3;
         Self {
             entry_point,
             start_text,

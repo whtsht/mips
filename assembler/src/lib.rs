@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-use instruction::gen_symbol_table;
+use instruction::{allocate_data, gen_symbol_table, write_data_section};
 use parser::parse;
 
 pub type BResult<T> = Result<T, Box<dyn Error>>;
@@ -17,6 +17,13 @@ pub type Binary = i32;
 pub enum Endian {
     Little,
     Big,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SectionType {
+    Text,
+    Data,
+    Word(Vec<Binary>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -35,11 +42,6 @@ pub enum Operand<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Operation(Binary);
-
-#[derive(Debug, PartialEq)]
-pub enum Presudo {
-    Word(Vec<Binary>),
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Instruction<'a> {
@@ -64,6 +66,7 @@ pub enum Instruction<'a> {
     LabelDef {
         name: &'a str,
     },
+    Section(SectionType),
 }
 
 fn write_code(endian: Endian, code: Binary, output: &mut Vec<u8>) -> BResult<()> {
@@ -83,18 +86,27 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     let mut input = File::open(input)?;
     input.read_to_string(&mut source)?;
 
+    // Parse input data
     let tokens = parse(&source)?;
-    let symbol_table = gen_symbol_table(&tokens);
+
+    // Create file header
     let file_header = FileHeader::new(&tokens);
 
+    // Gen symbol table
+    let symbol_table = gen_symbol_table(&tokens, &file_header);
+
+    // Write file header
     file_header.write_code(endian, &mut output)?;
 
-    for code in tokens
-        .iter()
-        .filter_map(|t| t.code(&symbol_table, &file_header))
-    {
+    // Write text section
+    for code in tokens.iter().filter_map(|t| t.code(&symbol_table)) {
         write_code(endian, code, &mut output)?;
     }
+
+    // Gen global data and write data section
+    let data = allocate_data(&tokens);
+    write_data_section(endian, &data, &mut output)?;
+
     Ok(output)
 }
 

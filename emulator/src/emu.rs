@@ -100,6 +100,11 @@ impl Emulator {
             return;
         }
 
+        if memory_instruction(&mut self.register, &mut self.memory, code) {
+            self.pc += 1;
+            return;
+        }
+
         panic!("failed to decode a instruction [PC = {}]", self.pc);
     }
 
@@ -120,7 +125,7 @@ impl Emulator {
 }
 
 pub fn opcode(code: Binary) -> Binary {
-    code >> 26
+    (code as u32 >> 26) as Binary
 }
 
 pub fn funct(code: Binary) -> Binary {
@@ -224,7 +229,7 @@ pub fn arithmetic_with_immediate(register: &mut Register, code: Binary) -> bool 
 }
 
 pub fn memory_instruction(register: &mut Register, memory: &mut [Binary], code: Binary) -> bool {
-    match code >> 26 {
+    match opcode(code) {
         // Load Word
         0x23 => {
             let ii = II::decode(code);
