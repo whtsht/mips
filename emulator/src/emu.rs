@@ -162,27 +162,29 @@ pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary>
 }
 
 fn branch_instruction(register: &mut Register, code: Binary) -> Option<JumpDest> {
-    let opcode = opcode(code);
-    // Branch On Equal
-    if opcode == 0x4 {
-        let ii = II::decode(code);
+    match opcode(code) {
+        // Branch On Equal
+        0x4 => {
+            let ii = II::decode(code);
 
-        if register.get(ii.rs) == register.get(ii.rt) {
-            return Some(JumpDest::Spec(ii.im));
-        } else {
-            return Some(JumpDest::Next);
+            if register.get(ii.rs) == register.get(ii.rt) {
+                return Some(JumpDest::Spec(ii.im));
+            } else {
+                return Some(JumpDest::Next);
+            }
         }
-    // Branch On Not Equal
-    } else if opcode == 0x5 {
-        let ii = II::decode(code);
+        // Branch On Not Equal
+        0x5 => {
+            let ii = II::decode(code);
 
-        if register.get(ii.rs) != register.get(ii.rt) {
-            return Some(JumpDest::Spec(ii.im));
-        } else {
-            return Some(JumpDest::Next);
+            if register.get(ii.rs) != register.get(ii.rt) {
+                return Some(JumpDest::Spec(ii.im));
+            } else {
+                return Some(JumpDest::Next);
+            }
         }
+        _ => None,
     }
-    None
 }
 
 pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
@@ -218,7 +220,6 @@ pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
         }
         // Set Less Than
         0x2a => {
-            println!("slt rd:{} rs:{} rt:{}", i.rd, i.rs, i.rt);
             if register.get(i.rs) < register.get(i.rt) {
                 register.set(i.rd, 1);
             } else {

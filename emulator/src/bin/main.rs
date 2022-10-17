@@ -1,4 +1,4 @@
-use mips_emu::{Emulator, Endian};
+use mips_emulator::{Emulator, Endian};
 
 fn main() {
     let mut args = std::env::args();
