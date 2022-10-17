@@ -75,7 +75,7 @@ impl Emulator {
         let code = self.memory[self.pc as usize];
 
         // For debug
-        println!("{}: {:032b}", self.pc, code);
+        // println!("{}: {:032b}", self.pc, code);
 
         if let Some(jd) = jump_instruction(&mut self.register, code) {
             match jd {
