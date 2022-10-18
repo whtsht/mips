@@ -213,6 +213,22 @@ fn move_from(i: &str) -> IResult<&str, Instruction> {
     })(i)
 }
 
+fn shift_instruction(i: &str) -> IResult<&str, Instruction> {
+    let sll = map(tag("sll"), |_| 0x0);
+    let srl = map(tag("srl"), |_| 0x2);
+
+    map(tuple((alt((sll, srl)), op2im)), |(fc, op2im)| {
+        Instruction::ri(
+            Operation(0x0),
+            op2im.rs,
+            op2im.rt,
+            Operand::Constant(0x0),
+            op2im.im,
+            Operand::Constant(fc),
+        )
+    })(i)
+}
+
 fn arithmetic_with_hi_lo(i: &str) -> IResult<&str, Instruction> {
     let multu = map(tag("multu"), |_| 0x19);
     let mult = map(tag("mult"), |_| 0x18);
@@ -252,7 +268,7 @@ fn def_label(i: &str) -> IResult<&str, Instruction> {
         name: s,
     })(i)
 }
-// .word 1, 2, 3,
+
 fn section(i: &str) -> IResult<&str, Instruction> {
     let data = map(tag("data"), |_| Instruction::Section(SectionType::Data));
     let word = map(
@@ -279,6 +295,7 @@ pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
                 arithmetic_with_immediate,
                 arithmetic_with_register,
                 arithmetic_with_hi_lo,
+                shift_instruction,
                 move_from,
             )),
             sp,
@@ -349,27 +366,6 @@ fn test_one_parse() {
         one_parse(input),
         Ok(("", Instruction::Section(SectionType::Word(vec![1, 2, 3]))))
     );
-
-    // let input = "addu $3, $5, $2";
-    // assert_eq!(
-    //     one_parse(input),
-    //     Ok(("", Token::ri(0x0, 0x5, 0x2, 0x3, 0x0, 0x21)))
-    // );
-
-    // let input = "or $10, $11, $12";
-    // assert_eq!(
-    //     one_parse(input),
-    //     Ok(("", Token::ri(0x0, 0xb, 0xc, 0xa, 0x0, 0x25)))
-    // );
-
-    // let input = "and $t0, $t1, $t2";
-    // assert_eq!(
-    //     one_parse(input),
-    //     Ok(("", Token::ri(0x0, 0x9, 0xa, 0x8, 0x0, 0x24)))
-    // );
-
-    // let input = "lw $t0, 400($t1)";
-    // assert_eq!(one_parse(input), Ok(("", Token::ii(0x23, 0x9, 0x8, 400))));
 }
 
 #[test]

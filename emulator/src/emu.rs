@@ -112,6 +112,11 @@ impl Emulator {
             return;
         }
 
+        if shirt_instruction(&mut self.register, code) {
+            self.pc += 1;
+            return;
+        }
+
         if move_from(&mut self.register, code) {
             self.pc += 1;
             return;
@@ -165,6 +170,27 @@ pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary>
         return Some(ji.ad);
     }
     None
+}
+
+fn shirt_instruction(register: &mut Register, code: Binary) -> bool {
+    if opcode(code) != 0x0 {
+        return false;
+    }
+
+    let i = RI::decode(code);
+    match i.fc {
+        0x0 => {
+            let rs = register.get(i.rs);
+            register.set(i.rt, rs << i.sh);
+            true
+        }
+        0x2 => {
+            let rs = register.get(i.rs);
+            register.set(i.rt, rs >> i.sh);
+            true
+        }
+        _ => false,
+    }
 }
 
 fn move_from(register: &mut Register, code: Binary) -> bool {
