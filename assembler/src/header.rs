@@ -6,9 +6,11 @@ use crate::FileHeader;
 use crate::Instruction;
 
 impl FileHeader {
+    const HEADER_SIZE: Binary = 3;
+
     pub fn new(tokens: &Vec<Instruction>) -> Self {
-        let entry_point = 3;
-        let start_text = 3;
+        let entry_point = FileHeader::HEADER_SIZE;
+        let start_text = FileHeader::HEADER_SIZE;
         let start_data = tokens
             .iter()
             .filter(|t| match t {
@@ -16,7 +18,7 @@ impl FileHeader {
                 _ => false,
             })
             .count() as Binary
-            + 3;
+            + FileHeader::HEADER_SIZE;
         Self {
             entry_point,
             start_text,

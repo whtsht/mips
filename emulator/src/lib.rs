@@ -3,6 +3,7 @@ pub mod emu;
 pub mod register;
 
 pub type Binary = i32;
+pub type EBinary = i64;
 const MEMORY_SIZE: usize = 8192;
 
 pub struct Register {

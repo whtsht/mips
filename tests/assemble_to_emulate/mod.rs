@@ -20,4 +20,6 @@ fn test() {
     assert("003_loop.s", "0123456789");
     assert("004_data.s", "100");
     assert("005_slt.s", "0123456789");
+    assert("006_mul.s", "20");
+    assert("007_div.s", "62");
 }

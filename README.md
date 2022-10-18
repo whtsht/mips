@@ -10,17 +10,21 @@ Start point of data section (32bit)
 
 ## Support Instruction
 
-### Format
-
-- R: opcode rd, rs, rt, shamt, funct
-- I: opcode rs, rt, immediate
-- J: opcode address
+### Todo
+- Add
+- Sub
+- Mul(U)
+- Div(U)
+- Shift L, R
+- Move from Lo, Hi
 
 | Name                   | Mnemonic | Opcode | Function | Type |
 |------------------------|----------|--------|----------|------|
 | Jump                   | j        | 0x2    | -        | J    |
 | Jump Register          | jr       | 0x0    | 0x8      | R    |
+| Add                    | add      | 0x0    | 0x20     | R    |
 | Add Unsigned           | addu     | 0x0    | 0x21     | R    |
+| Sub                    | sub      | 0x0    | 0x22     | R    |
 | Sub Unsigned           | subu     | 0x0    | 0x23     | R    |
 | And                    | and      | 0x0    | 0x24     | R    |
 | Or                     | or       | 0x0    | 0x25     | R    |
@@ -31,6 +35,8 @@ Start point of data section (32bit)
 | Divide Unsigned        | divu     | 0x0    | 0x1b     | R    |
 | Shift Left Logical     | sll      | 0x0    | 0x0      | R    |
 | Shift Right Logical    | srl      | 0x0    | 0x2      | R    |
+| Move from Hi           | mfhi     | 0x0    | 0x10     | R    |
+| Move from Lo           | mflo     | 0x0    | 0x12     | R    |
 | Add Immediate          | addi     | 0x8    | 0x0      | I    |
 | Add Immediate Unsigned | addiu    | 0x9    | 0x0      | I    |
 | Load Word              | lw       | 0x23   | 0x0      | I    |

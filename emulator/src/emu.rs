@@ -3,6 +3,7 @@ use crate::as_i32_le;
 use crate::decode::JI;
 use crate::decode::{II, RI};
 use crate::Binary;
+use crate::EBinary;
 use crate::Emulator;
 use crate::Endian;
 use crate::Register;
@@ -63,7 +64,8 @@ impl Emulator {
         if v0 == 1 {
             let a0 = self.register.get(Register::A0);
 
-            println!("{}", a0);
+            print!("{}", a0);
+            std::io::stdout().flush().unwrap();
             self.stdout_history.push_str(&format!("{}", a0));
             return true;
         }
@@ -106,6 +108,11 @@ impl Emulator {
         }
 
         if memory_instruction(&mut self.register, &mut self.memory, code) {
+            self.pc += 1;
+            return;
+        }
+
+        if move_from(&mut self.register, code) {
             self.pc += 1;
             return;
         }
@@ -156,9 +163,29 @@ pub fn jump_instruction(register: &mut Register, code: Binary) -> Option<Binary>
     } else if opcode == 0x2 {
         let ji = JI::decode(code);
         return Some(ji.ad);
-        // Branch On Equal
     }
     None
+}
+
+fn move_from(register: &mut Register, code: Binary) -> bool {
+    if opcode(code) != 0x0 {
+        return false;
+    }
+    let i = RI::decode(code);
+
+    match i.fc {
+        0x10 => {
+            let hi = register.get(Register::HI);
+            register.set(i.rd, hi);
+            true
+        }
+        0x12 => {
+            let lo = register.get(Register::LO);
+            register.set(i.rd, lo);
+            true
+        }
+        _ => false,
+    }
 }
 
 fn branch_instruction(register: &mut Register, code: Binary) -> Option<JumpDest> {
@@ -188,6 +215,9 @@ fn branch_instruction(register: &mut Register, code: Binary) -> Option<JumpDest>
 }
 
 pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
+    if opcode(code) != 0x0 {
+        return false;
+    }
     let i = RI::decode(code);
     match i.fc {
         // Add Unsigned
@@ -225,6 +255,63 @@ pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
             } else {
                 register.set(i.rd, 0);
             }
+            true
+        }
+        // Divide
+        0x1a => {
+            let rs = register.get(i.rs);
+            let rt = register.get(i.rt);
+            let lo = rs / rt;
+            let hi = rs % rt;
+
+            register.set(Register::HI, hi);
+            register.set(Register::LO, lo);
+            true
+        }
+        // Divide Unsigned
+        0x1b => {
+            let rs = register.get(i.rs);
+            let rt = register.get(i.rt);
+            let lo = rs / rt;
+            let hi = rs % rt;
+
+            register.set(Register::HI, hi);
+            register.set(Register::LO, lo);
+
+            true
+        }
+        // Multiply
+        0x18 => {
+            let rs = register.get(i.rs) as EBinary;
+            let rt = register.get(i.rt) as EBinary;
+
+            let rd = rs * rt;
+
+            let lm = ((1 as EBinary) << 32) - 1;
+            let hm = (((1 as EBinary) << 32) - 1) << 32;
+
+            let lo = rd & lm;
+            let hi = (rd & hm) >> 32;
+
+            register.set(Register::HI, hi as Binary);
+            register.set(Register::LO, lo as Binary);
+            true
+        }
+        // Multiply Unsigned
+        0x19 => {
+            let rs = register.get(i.rs) as EBinary;
+            let rt = register.get(i.rt) as EBinary;
+
+            let rd = rs * rt;
+
+            let lm = ((1 as EBinary) << 32) - 1;
+            let hm = (((1 as EBinary) << 32) - 1) << 32;
+
+            let lo = rd & lm;
+            let hi = (rd & hm) >> 32;
+
+            register.set(Register::HI, hi as Binary);
+            register.set(Register::LO, lo as Binary);
             true
         }
         _ => false,

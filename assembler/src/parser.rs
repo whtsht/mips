@@ -88,31 +88,47 @@ fn c_operand(i: &str) -> IResult<&str, Operand> {
     preceded(comma, operand)(i)
 }
 
-fn op2im(i: &str) -> IResult<&str, (Operand, Operand, Operand)> {
-    let (i, rs) = operand(i)?;
-    let (i, rt) = c_operand(i)?;
-    let (i, im) = preceded(comma, operand)(i)?;
-
-    return Ok((i, (rs, rt, im)));
+struct Op3<'a> {
+    rs: Operand<'a>,
+    rt: Operand<'a>,
+    rd: Operand<'a>,
 }
 
-fn op3(i: &str) -> IResult<&str, (Operand, Operand, Operand)> {
-    tuple((operand, c_operand, c_operand))(i)
+struct Op2Im<'a> {
+    rs: Operand<'a>,
+    rt: Operand<'a>,
+    im: Operand<'a>,
+}
+
+fn op2im(i: &str) -> IResult<&str, Op2Im> {
+    let (i, rt) = operand(i)?;
+    let (i, rs) = c_operand(i)?;
+    let (i, im) = preceded(comma, operand)(i)?;
+
+    return Ok((i, Op2Im { rs, rt, im }));
+}
+
+fn op3(i: &str) -> IResult<&str, Op3> {
+    map(tuple((operand, c_operand, c_operand)), |(rd, rs, rt)| Op3 {
+        rs,
+        rt,
+        rd,
+    })(i)
 }
 
 fn branch_instruction(i: &str) -> IResult<&str, Instruction> {
-    let beq = map(tuple((tag("beq"), op2im)), |(_, (rs, rt, im))| {
-        Instruction::ii(Operation(0x4), rs, rt, im)
+    let beq = map(tuple((tag("beq"), op2im)), |(_, op2im)| {
+        Instruction::ii(Operation(0x4), op2im.rs, op2im.rt, op2im.im)
     });
-    let bne = map(tuple((tag("bne"), op2im)), |(_, (rs, rt, im))| {
-        Instruction::ii(Operation(0x5), rs, rt, im)
+    let bne = map(tuple((tag("bne"), op2im)), |(_, op2im)| {
+        Instruction::ii(Operation(0x5), op2im.rs, op2im.rt, op2im.im)
     });
-    let slt = map(tuple((tag("slt"), op3)), |(_, (rd, rs, rt))| {
+    let slt = map(tuple((tag("slt"), op3)), |(_, op3)| {
         Instruction::ri(
             Operation(0x0),
-            rs,
-            rt,
-            rd,
+            op3.rs,
+            op3.rt,
+            op3.rd,
             Operand::Constant(0x0),
             Operand::Constant(0x2a),
         )
@@ -156,8 +172,8 @@ fn arithmetic_with_immediate(i: &str) -> IResult<&str, Instruction> {
     let addiu = map(tag("addiu"), |_| Operation(0x9));
 
     let (i, op) = alt((addi, addiu))(i)?;
-    let (i, (rt, rs, im)) = op2im(i)?;
-    Ok((i, Instruction::ii(op, rs, rt, im)))
+    let (i, op2im) = op2im(i)?;
+    Ok((i, Instruction::ii(op, op2im.rs, op2im.rt, op2im.im)))
 }
 
 fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
@@ -167,11 +183,55 @@ fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
     let or = map(tag("or"), |_| 0x25);
 
     let (i, fc) = map(alt((addu, subu, and, or)), |n| Operand::Constant(n))(i)?;
-    let (i, (rd, rs, rt)) = op3(i)?;
+    let (i, op3) = op3(i)?;
     Ok((
         i,
-        Instruction::ri(Operation(0x0), rs, rt, rd, Operand::Constant(0x0), fc),
+        Instruction::ri(
+            Operation(0x0),
+            op3.rs,
+            op3.rt,
+            op3.rd,
+            Operand::Constant(0x0),
+            fc,
+        ),
     ))
+}
+
+fn move_from(i: &str) -> IResult<&str, Instruction> {
+    let mfhi = map(tag("mfhi"), |_| Operand::Constant(0x10));
+    let mflo = map(tag("mflo"), |_| Operand::Constant(0x12));
+
+    map(tuple((alt((mfhi, mflo)), operand)), |(fc, rd)| {
+        Instruction::ri(
+            Operation(0x0),
+            Operand::Constant(0x0),
+            Operand::Constant(0x0),
+            rd,
+            Operand::Constant(0x0),
+            fc,
+        )
+    })(i)
+}
+
+fn arithmetic_with_hi_lo(i: &str) -> IResult<&str, Instruction> {
+    let multu = map(tag("multu"), |_| 0x19);
+    let mult = map(tag("mult"), |_| 0x18);
+    let divu = map(tag("divu"), |_| 0x1b);
+    let div = map(tag("div"), |_| 0x1a);
+
+    map(
+        tuple((alt((multu, mult, divu, div)), operand, c_operand)),
+        |(fc, rs, rt)| {
+            Instruction::ri(
+                Operation(0x0),
+                rs,
+                rt,
+                Operand::Constant(0x0),
+                Operand::Constant(0x0),
+                Operand::Constant(fc),
+            )
+        },
+    )(i)
 }
 
 fn syscall(i: &str) -> IResult<&str, Instruction> {
@@ -218,6 +278,8 @@ pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
                 jump_instruction,
                 arithmetic_with_immediate,
                 arithmetic_with_register,
+                arithmetic_with_hi_lo,
+                move_from,
             )),
             sp,
         ),
