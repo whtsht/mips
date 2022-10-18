@@ -19,7 +19,7 @@ use nom::IResult;
 fn sp(i: &str) -> IResult<&str, &str> {
     let chars = " \t\r\n";
 
-    take_while(move |c| chars.contains(c))(i)
+    take_while(move |c| chars.contains(c) || chars.len() == 0)(i)
 }
 
 fn comma(i: &str) -> IResult<&str, ()> {
@@ -281,11 +281,21 @@ fn section(i: &str) -> IResult<&str, Instruction> {
     preceded(tag("."), alt((data, word)))(i)
 }
 
-pub fn one_parse(i: &str) -> IResult<&str, Instruction> {
+fn comment(i: &str) -> IResult<&str, &str> {
+    map(
+        tuple((sp, tag("#"), take_while(|c| c != '\n'), sp)),
+        |(_, _, c, _)| c,
+    )(i)
+}
+
+pub fn one_parse(mut i: &str) -> IResult<&str, Instruction> {
+    while let Ok((r, _)) = comment(i) {
+        i = r;
+    }
     preceded(
         sp,
         terminated(
-            nom::branch::alt((
+            alt((
                 section,
                 syscall,
                 def_label,
@@ -316,7 +326,7 @@ pub fn parse(input: &str) -> Result<Vec<Instruction>, String> {
             let cursor = input.len() - i.len();
             let line_number = input[..cursor].chars().filter(|c| c == &'\n').count();
 
-            return Err(format!("Line: {} {}", line_number - 1, &input[cursor..]));
+            return Err(format!("Line: {} {}", line_number - 0, &input[cursor..]));
         }
     }
 

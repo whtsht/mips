@@ -22,5 +22,5 @@ fn test() {
     assert("005_slt.s", "0123456789");
     assert("006_mul.s", "20");
     assert("007_div.s", "62");
-    assert("008_shift.s", "322");
+    assert("008_shift.s", "-32-2");
 }

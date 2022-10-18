@@ -1,6 +1,7 @@
 addi $a0, $zero, 0
 addi $t0, $zero, 10
 
+# Repeat 10 times.
 L:
 
 addi $v0, $0, 1
