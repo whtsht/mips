@@ -76,9 +76,6 @@ impl Emulator {
     pub fn step(&mut self) {
         let code = self.memory[self.pc as usize];
 
-        // For debug
-        // println!("{}: {:032b}", self.pc, code);
-
         if let Some(jd) = branch_instruction(&mut self.register, code) {
             match jd {
                 JumpDest::Spec(pc) => self.pc = pc,
@@ -362,6 +359,11 @@ pub fn arithmetic_with_immediate(register: &mut Register, code: Binary) -> bool 
             let im = ii.im;
 
             register.set(ii.rt, rs.wrapping_add(im));
+            true
+        }
+        0xf => {
+            let ii = II::decode(code);
+            register.set(ii.rt, ii.im << 16);
             true
         }
         _ => false,

@@ -159,21 +159,23 @@ fn memory_instruction(i: &str) -> IResult<&str, Instruction> {
     let lw = map(tag("lw"), |_| Operation(0x23));
     let sw = map(tag("sw"), |_| Operation(0x2b));
 
-    let (i, op) = alt((lw, sw))(i)?;
-    let (i, rt) = operand(i)?;
-    let (i, im) = preceded(comma, operand)(i)?;
-    let (i, rs) = preceded(char('('), terminated(operand, char(')')))(i)?;
+    let rt = operand;
+    let im = preceded(comma, operand);
+    let rs = preceded(char('('), terminated(operand, char(')')));
 
-    Ok((i, Instruction::ii(op, rs, rt, im)))
+    map(tuple((alt((lw, sw)), rt, im, rs)), |(op, rt, im, rs)| {
+        Instruction::ii(op, rs, rt, im)
+    })(i)
 }
 
 fn arithmetic_with_immediate(i: &str) -> IResult<&str, Instruction> {
     let addi = map(tag("addi"), |_| Operation(0x8));
     let addiu = map(tag("addiu"), |_| Operation(0x9));
+    let lui = map(tag("lui"), |_| Operation(0xf));
 
-    let (i, op) = alt((addi, addiu))(i)?;
-    let (i, op2im) = op2im(i)?;
-    Ok((i, Instruction::ii(op, op2im.rs, op2im.rt, op2im.im)))
+    map(tuple((alt((addiu, addi, lui)), op2im)), |(op, op2im)| {
+        Instruction::ii(op, op2im.rs, op2im.rt, op2im.im)
+    })(i)
 }
 
 fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
@@ -182,19 +184,16 @@ fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
     let and = map(tag("and"), |_| 0x24);
     let or = map(tag("or"), |_| 0x25);
 
-    let (i, fc) = map(alt((addu, subu, and, or)), |n| Operand::Constant(n))(i)?;
-    let (i, op3) = op3(i)?;
-    Ok((
-        i,
+    map(tuple((alt((addu, subu, and, or)), op3)), |(fc, op3)| {
         Instruction::ri(
             Operation(0x0),
             op3.rs,
             op3.rt,
             op3.rd,
             Operand::Constant(0x0),
-            fc,
-        ),
-    ))
+            Operand::Constant(fc),
+        )
+    })(i)
 }
 
 fn move_from(i: &str) -> IResult<&str, Instruction> {

@@ -24,6 +24,7 @@ pub enum SectionType {
     Text,
     Data,
     Word(Vec<Binary>),
+    Space(Binary),
 }
 
 #[derive(Debug, PartialEq)]

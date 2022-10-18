@@ -35,8 +35,14 @@ impl Operation {
 pub fn allocate_data(tokens: &Vec<Instruction>) -> Vec<Binary> {
     let mut output = Vec::new();
     for token in tokens.iter() {
-        if let Instruction::Section(SectionType::Word(w)) = token {
-            output.extend(w.iter());
+        match token {
+            Instruction::Section(SectionType::Word(w)) => output.extend(w.iter()),
+            Instruction::Section(SectionType::Space(n)) => {
+                for _ in 0..(*n / 4) {
+                    output.push(0);
+                }
+            }
+            _ => {}
         }
     }
     output
@@ -58,9 +64,10 @@ fn test_allocate_data() {
     let tokens = vec![
         Instruction::Section(SectionType::Word(vec![1, 2, 3])),
         Instruction::Section(SectionType::Word(vec![100, 200, 300])),
+        Instruction::Section(SectionType::Space(12)),
     ];
     let b = allocate_data(&tokens);
-    assert_eq!(b, vec![1, 2, 3, 100, 200, 300])
+    assert_eq!(b, vec![1, 2, 3, 100, 200, 300, 0, 0, 0])
 }
 
 pub fn gen_symbol_table<'a>(
