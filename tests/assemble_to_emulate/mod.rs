@@ -27,4 +27,5 @@ fn test() {
     assert("007_div.s", "62");
     assert("008_shift.s", "-32-2");
     assert("009_space.s", "15");
+    assert("010_ori.s", "-10");
 }

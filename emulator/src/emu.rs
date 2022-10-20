@@ -245,11 +245,25 @@ pub fn arithmetic_with_register(register: &mut Register, code: Binary) -> bool {
     }
     let i = RI::decode(code);
     match i.fc {
+        // Add
+        0x20 => {
+            let rs = register.get(i.rs);
+            let rt = register.get(i.rt);
+            register.set(i.rd, rs.wrapping_add(rt));
+            true
+        }
         // Add Unsigned
         0x21 => {
             let rs = register.get(i.rs);
             let rt = register.get(i.rt);
             register.set(i.rd, rs.wrapping_add(rt));
+            true
+        }
+        // Sub
+        0x22 => {
+            let rs = register.get(i.rs);
+            let rt = register.get(i.rt);
+            register.set(i.rd, rs.wrapping_sub(rt));
             true
         }
         // Sub Unsigned
@@ -363,9 +377,20 @@ pub fn arithmetic_with_immediate(register: &mut Register, code: Binary) -> bool 
             register.set(ii.rt, rs.wrapping_add(im));
             true
         }
+        // Load Upper Imm
         0xf => {
             let ii = II::decode(code);
             register.set(ii.rt, ii.im << 16);
+            true
+        }
+        // Or Immediate
+        0xd => {
+            let ii = II::decode(code);
+            let rs = register.get(ii.rs);
+            let im = ii.im;
+
+            register.set(ii.rt, rs | im);
+
             true
         }
         _ => false,

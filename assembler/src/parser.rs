@@ -172,28 +172,35 @@ fn arithmetic_with_immediate(i: &str) -> IResult<&str, Instruction> {
     let addi = map(tag("addi"), |_| Operation(0x8));
     let addiu = map(tag("addiu"), |_| Operation(0x9));
     let lui = map(tag("lui"), |_| Operation(0xf));
+    let ori = map(tag("ori"), |_| Operation(0xd));
 
-    map(tuple((alt((addiu, addi, lui)), op2im)), |(op, op2im)| {
-        Instruction::ii(op, op2im.rs, op2im.rt, op2im.im)
-    })(i)
+    map(
+        tuple((alt((addiu, addi, lui, ori)), op2im)),
+        |(op, op2im)| Instruction::ii(op, op2im.rs, op2im.rt, op2im.im),
+    )(i)
 }
 
 fn arithmetic_with_register(i: &str) -> IResult<&str, Instruction> {
+    let add = map(tag("add"), |_| 0x20);
     let addu = map(tag("addu"), |_| 0x21);
+    let sub = map(tag("sub"), |_| 0x22);
     let subu = map(tag("subu"), |_| 0x23);
     let and = map(tag("and"), |_| 0x24);
     let or = map(tag("or"), |_| 0x25);
 
-    map(tuple((alt((addu, subu, and, or)), op3)), |(fc, op3)| {
-        Instruction::ri(
-            Operation(0x0),
-            op3.rs,
-            op3.rt,
-            op3.rd,
-            Operand::Constant(0x0),
-            Operand::Constant(fc),
-        )
-    })(i)
+    map(
+        tuple((alt((addu, add, subu, sub, and, or)), op3)),
+        |(fc, op3)| {
+            Instruction::ri(
+                Operation(0x0),
+                op3.rs,
+                op3.rt,
+                op3.rd,
+                Operand::Constant(0x0),
+                Operand::Constant(fc),
+            )
+        },
+    )(i)
 }
 
 fn move_from(i: &str) -> IResult<&str, Instruction> {

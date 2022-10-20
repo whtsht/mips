@@ -10,14 +10,6 @@ Start point of data section (32bit)
 
 ## Support Instruction
 
-### Todo
-- Add
-- Sub
-- Mul(U)
-- Div(U)
-- Shift L, R
-- Move from Lo, Hi
-
 | Name                   | Mnemonic | Opcode | Function | Type |
 |------------------------|----------|--------|----------|------|
 | Jump                   | j        | 0x2    | -        | J    |
