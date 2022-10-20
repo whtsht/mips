@@ -32,19 +32,28 @@ impl Operation {
     }
 }
 
-pub fn allocate_data(tokens: &Vec<Instruction>) -> Vec<Binary> {
+pub fn get_data_section(sections: &Vec<Vec<&Instruction>>) -> Vec<Binary> {
     let mut output = Vec::new();
-    for token in tokens.iter() {
-        match token {
-            Instruction::Section(SectionType::Word(w)) => output.extend(w.iter()),
+
+    sections
+        .iter()
+        .filter(|s| match s[0] {
+            Instruction::Section(SectionType::Data) => true,
+            _ => false,
+        })
+        .flatten()
+        .for_each(|i| match i {
+            Instruction::Section(SectionType::Word(v)) => {
+                output.extend(v.iter());
+            }
             Instruction::Section(SectionType::Space(n)) => {
                 for _ in 0..(*n / 4) {
                     output.push(0);
                 }
             }
             _ => {}
-        }
-    }
+        });
+
     output
 }
 
@@ -59,52 +68,61 @@ pub fn write_data_section(
     Ok(())
 }
 
-#[test]
-fn test_allocate_data() {
-    let tokens = vec![
-        Instruction::Section(SectionType::Word(vec![1, 2, 3])),
-        Instruction::Section(SectionType::Word(vec![100, 200, 300])),
-        Instruction::Section(SectionType::Space(12)),
-    ];
-    let b = allocate_data(&tokens);
-    assert_eq!(b, vec![1, 2, 3, 100, 200, 300, 0, 0, 0])
-}
-
 pub fn gen_symbol_table<'a>(
-    tokens: &'a Vec<Instruction>,
+    sections: &'a Vec<Vec<&Instruction>>,
     file_header: &FileHeader,
 ) -> HashMap<&'a str, Binary> {
     let mut table = HashMap::new();
-    let mut tokens = tokens.iter();
 
-    for (count, token) in tokens
-        .by_ref()
-        .take_while(|t| match t {
-            Instruction::Section(_) => false,
-            _ => true,
-        })
-        .enumerate()
-    {
-        match token {
-            Instruction::LabelDef { name } => {
-                if table.get(name).is_some() {
-                    panic!("Label {} is duplicate", name);
-                }
-                table.insert(*name, count as Binary + file_header.start_text);
-            }
+    let mut text_section = &sections[0][1..];
+
+    for s in &sections[1..] {
+        match s.get(0) {
+            Some(Instruction::Section(SectionType::Text)) => text_section = &s[1..],
             _ => {}
         }
     }
 
-    for (count, token) in tokens.enumerate() {
-        match token {
+    let mut count = file_header.start_text;
+    for ins in text_section {
+        match ins {
             Instruction::LabelDef { name } => {
-                if table.get(name).is_some() {
-                    panic!("Label {} is duplicate", name);
-                }
-                table.insert(*name, count as Binary + file_header.start_data);
+                table.insert(*name, count);
             }
+            _ => {
+                count += 1;
+            }
+        }
+    }
+
+    if sections.len() < 2 {
+        return table;
+    }
+
+    let mut data_section = &sections[1][1..];
+
+    for s in &sections[1..] {
+        match s.get(0) {
+            Some(Instruction::Section(SectionType::Data)) => data_section = &s[1..],
             _ => {}
+        }
+    }
+
+    let mut count = file_header.start_data;
+    for ins in data_section {
+        match ins {
+            Instruction::LabelDef { name } => {
+                table.insert(*name, count);
+            }
+            Instruction::Section(SectionType::Word(v)) => {
+                count += v.len() as Binary;
+            }
+            Instruction::Section(SectionType::Space(n)) => {
+                count += *n / 4;
+            }
+            _ => {
+                count += 1;
+            }
         }
     }
 
@@ -174,13 +192,111 @@ impl<'a> Instruction<'a> {
 }
 
 #[test]
-fn test_instruction() {
-    // assert_eq!(
-    //     Token::ii(0x8, 0x1, 0x2, 0xa).code(),
-    //     0b001000_00001_00010_0000000000001010
-    // );
-    // assert_eq!(
-    //     Token::ii(0x8, 0x5, 0x0, 555).code(),
-    //     0b001000_00101_00000_0000001000101011
-    // );
+fn test_label() {
+    use crate::parse;
+    let input = r#"
+        .text
+        L1: addi $t0, $zero, L3
+        L2: addi $t0, $zero, L4
+        .data
+        L3: .space 20
+        L4: .space 16
+        L5: .space 12
+        "#;
+
+    let mut tokens = parse(input).unwrap();
+    if let Some(Instruction::Section(SectionType::Text)) = tokens.get(0) {
+    } else {
+        tokens.insert(0, Instruction::Section(SectionType::Text));
+    }
+    let sections = tokens.split_rinclusive(|t| match t {
+        Instruction::Section(SectionType::Text) | Instruction::Section(SectionType::Data) => false,
+        _ => true,
+    });
+    let file_header = FileHeader::new(&sections);
+    let symbol_table = gen_symbol_table(&sections, &file_header);
+
+    assert_eq!(symbol_table.get("L1"), Some(&3));
+    assert_eq!(symbol_table.get("L2"), Some(&4));
+    assert_eq!(symbol_table.get("L3"), Some(&5));
+    assert_eq!(symbol_table.get("L4"), Some(&10));
+    assert_eq!(symbol_table.get("L5"), Some(&14));
+}
+
+#[test]
+fn test_data_section() {
+    use crate::parse;
+    let input = r#"
+        .text
+        L1: addi $t0, $zero, L3
+        L2: addi $t0, $zero, L4
+        .data
+        L3: .space 20
+        L4: .space 16
+        L5: .word 1, 2, 3
+        "#;
+
+    let tokens = parse(input).unwrap();
+    let sections = tokens.split_rinclusive(|t| match t {
+        Instruction::Section(SectionType::Text) | Instruction::Section(SectionType::Data) => false,
+        _ => true,
+    });
+
+    let data = get_data_section(&sections);
+
+    assert_eq!(data, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3]);
+}
+
+#[test]
+fn test_vec() {
+    let v1 = vec![0, 23, 3, 12, 0, 12, 4, 5, 0, 10, 1];
+
+    assert_eq!(
+        v1.split_rinclusive(|v| v != &0),
+        vec![
+            vec![&0, &23, &3, &12],
+            vec![&0, &12, &4, &5],
+            vec![&0, &10, &1]
+        ]
+    );
+}
+
+pub trait SplitRInclusive {
+    type Item;
+    fn split_rinclusive(&self, f: impl Fn(&Self::Item) -> bool) -> Vec<Vec<&Self::Item>>;
+}
+
+impl<T: std::fmt::Debug> SplitRInclusive for Vec<T> {
+    type Item = T;
+
+    fn split_rinclusive(&self, f: impl Fn(&Self::Item) -> bool) -> Vec<Vec<&Self::Item>> {
+        let mut output = vec![vec![]];
+        let mut idx = 0;
+
+        let mut vec = self.into_iter();
+
+        loop {
+            match vec.next() {
+                Some(v) if !f(&v) => {
+                    output[idx].push(v);
+                    break;
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+
+        for v in vec {
+            if f(&v) {
+                output[idx].push(v);
+            } else {
+                output.push(vec![]);
+                idx += 1;
+                output[idx].push(v);
+            }
+        }
+
+        output
+    }
 }

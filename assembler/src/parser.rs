@@ -270,6 +270,18 @@ fn def_label(i: &str) -> IResult<&str, Instruction> {
 
 fn section(i: &str) -> IResult<&str, Instruction> {
     let data = map(tag("data"), |_| Instruction::Section(SectionType::Data));
+    let text = map(tag("text"), |_| Instruction::Section(SectionType::Text));
+    let globl = map(
+        preceded(
+            tuple((tag("globl"), sp)),
+            separated_list0(
+                preceded(sp, terminated(tag(","), sp)),
+                map(string, |s| s.to_string()),
+            ),
+        ),
+        |w| Instruction::Section(SectionType::Globl(w)),
+    );
+
     let word = map(
         preceded(
             tuple((tag("word"), sp)),
@@ -277,7 +289,11 @@ fn section(i: &str) -> IResult<&str, Instruction> {
         ),
         |w| Instruction::Section(SectionType::Word(w)),
     );
-    preceded(tag("."), alt((data, word)))(i)
+
+    let space = map(preceded(tuple((tag("space"), sp)), number), |n| {
+        Instruction::Section(SectionType::Space(n))
+    });
+    preceded(tag("."), alt((data, word, space, text, globl)))(i)
 }
 
 fn comment(i: &str) -> IResult<&str, &str> {
@@ -375,6 +391,11 @@ fn test_one_parse() {
         one_parse(input),
         Ok(("", Instruction::Section(SectionType::Word(vec![1, 2, 3]))))
     );
+    let input = ".space 20";
+    assert_eq!(
+        one_parse(input),
+        Ok(("", Instruction::Section(SectionType::Space(20))))
+    );
 }
 
 #[test]
@@ -382,7 +403,6 @@ fn test_parse() {
     let input = r#"j L
 
 addi $a0, $0, 34
-
 L:
 addi $a0, $0, -34
 

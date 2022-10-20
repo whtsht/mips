@@ -2,8 +2,10 @@ use mips_assembler::assemble_to_u8;
 use mips_emulator::Emulator;
 
 fn assert(fname: &str, expect: &str) {
+    println!("Start assemble");
     let fname = format!("./tests/assemble_to_emulate/{}", fname);
     let bin = assemble_to_u8(mips_assembler::Endian::Little, &fname).unwrap();
+    println!("Finish assemble");
     let mut emu = Emulator::new();
     emu.clear_memory();
     emu.clear_register();
@@ -11,6 +13,7 @@ fn assert(fname: &str, expect: &str) {
         .unwrap();
     emu.run();
     assert_eq!(emu.stdout_history, expect);
+    println!("Finish emulate");
 }
 
 #[test]
@@ -23,4 +26,5 @@ fn test() {
     assert("006_mul.s", "20");
     assert("007_div.s", "62");
     assert("008_shift.s", "-32-2");
+    assert("009_space.s", "15");
 }

@@ -76,6 +76,8 @@ impl Emulator {
     pub fn step(&mut self) {
         let code = self.memory[self.pc as usize];
 
+        println!("[pc] = {}, [code] = {:032b}", self.pc, code);
+
         if let Some(jd) = branch_instruction(&mut self.register, code) {
             match jd {
                 JumpDest::Spec(pc) => self.pc = pc,

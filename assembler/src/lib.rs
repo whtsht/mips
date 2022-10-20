@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-use instruction::{allocate_data, gen_symbol_table, write_data_section};
+use instruction::{gen_symbol_table, get_data_section, write_data_section, SplitRInclusive};
 use parser::parse;
 
 pub type BResult<T> = Result<T, Box<dyn Error>>;
@@ -25,6 +25,7 @@ pub enum SectionType {
     Data,
     Word(Vec<Binary>),
     Space(Binary),
+    Globl(Vec<String>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -88,13 +89,23 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     input.read_to_string(&mut source)?;
 
     // Parse input data
-    let tokens = parse(&source)?;
+    let mut tokens = parse(&source)?;
+    if let Some(Instruction::Section(SectionType::Text)) = tokens.get(0) {
+    } else {
+        tokens.insert(0, Instruction::Section(SectionType::Text));
+    }
+
+    // Split each section
+    let sections = tokens.split_rinclusive(|t| match t {
+        Instruction::Section(SectionType::Text) | Instruction::Section(SectionType::Data) => false,
+        _ => true,
+    });
 
     // Create file header
-    let file_header = FileHeader::new(&tokens);
+    let file_header = FileHeader::new(&sections);
 
     // Gen symbol table
-    let symbol_table = gen_symbol_table(&tokens, &file_header);
+    let symbol_table = gen_symbol_table(&sections, &file_header);
 
     // Write file header
     file_header.write_code(endian, &mut output)?;
@@ -105,7 +116,7 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     }
 
     // Gen global data and write data section
-    let data = allocate_data(&tokens);
+    let data = get_data_section(&sections);
     write_data_section(endian, &data, &mut output)?;
 
     Ok(output)
