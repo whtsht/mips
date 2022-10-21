@@ -25,4 +25,5 @@ fn assert(fname: &str, expect: &str) {
 #[test]
 fn test() {
     assert("001_single_integer.lzy", "42");
+    assert("002_add_sub.lzy", "21");
 }
