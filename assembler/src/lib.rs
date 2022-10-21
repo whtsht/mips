@@ -79,14 +79,8 @@ fn write_code(endian: Endian, code: Binary, output: &mut Vec<u8>) -> BResult<()>
     Ok(())
 }
 
-pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
-    endian: Endian,
-    input: P,
-) -> BResult<Vec<u8>> {
+pub fn assemble_to_u8_from_string(endian: Endian, source: String) -> BResult<Vec<u8>> {
     let mut output = Vec::new();
-    let mut source = String::new();
-    let mut input = File::open(input)?;
-    input.read_to_string(&mut source)?;
 
     // Parse input data
     let mut tokens = parse(&source)?;
@@ -120,6 +114,17 @@ pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
     write_data_section(endian, &data, &mut output)?;
 
     Ok(output)
+}
+
+pub fn assemble_to_u8<P: AsRef<Path> + std::fmt::Display>(
+    endian: Endian,
+    input: P,
+) -> BResult<Vec<u8>> {
+    let mut source = String::new();
+    let mut input = File::open(input)?;
+    input.read_to_string(&mut source)?;
+
+    assemble_to_u8_from_string(endian, source)
 }
 
 pub fn assemble<P: AsRef<Path> + std::fmt::Display>(
