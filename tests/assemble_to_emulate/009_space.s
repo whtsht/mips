@@ -24,4 +24,4 @@ jr $ra
 
 .data
 A: .word 1, 2, 3, 4, 5
-B: .word 20
+B: .space 20

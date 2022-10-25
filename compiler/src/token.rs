@@ -1,12 +1,11 @@
 use std::fmt::Write;
-use std::iter::Peekable;
 
-pub type Result<'a, T> = std::result::Result<(&'a str, T), (&'a str, String)>;
+pub type TResult<'a, T> = std::result::Result<(&'a str, T), (&'a str, String)>;
 
-pub trait Parser<'a, T>: Fn(&'a str) -> Result<'a, T> {}
-impl<'a, T, F: Fn(&'a str) -> Result<'a, T>> Parser<'a, T> for F {}
+pub trait Parser<'a, T>: Fn(&'a str) -> TResult<'a, T> {}
+impl<'a, T, F: Fn(&'a str) -> TResult<'a, T>> Parser<'a, T> for F {}
 
-pub fn integer(i: &str) -> Result<i32> {
+pub fn integer(i: &str) -> TResult<i32> {
     let end = i.find(|c: char| !c.is_ascii_digit()).unwrap_or(i.len());
     match i[..end].parse() {
         Ok(value) => Ok((&i[end..], value)),
@@ -75,9 +74,10 @@ pub enum Punctuation {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Token<'a> {
     input: &'a str,
-    token_type: TokenType,
+    pub token_type: TokenType,
 }
 
 impl<'a> Token<'a> {
@@ -97,7 +97,7 @@ macro_rules! alt {
     }};
 }
 
-pub fn tokenize(mut i: &str) -> Result<Vec<Token>> {
+pub fn tokenize(mut i: &str) -> TResult<Vec<Token>> {
     let mut tokens = Vec::new();
 
     let plus = map(trim(char('+')), |_| {
@@ -120,24 +120,4 @@ pub fn tokenize(mut i: &str) -> Result<Vec<Token>> {
     }
 
     Ok((i, tokens))
-}
-
-pub fn expect_number<'a>(tokens: &mut impl Iterator<Item = &'a Token<'a>>) -> Result<i32> {
-    match tokens.next() {
-        Some(Token::Number(n)) => Ok(*n),
-        _ => Err(anyhow!("expected number")),
-    }
-}
-
-pub fn consume<'a>(
-    tokens: &mut Peekable<impl Iterator<Item = &'a Token<'a>>>,
-    expect: Punctuation,
-) -> bool {
-    if let Some(Token::Punctuation(peek)) = tokens.peek() {
-        if peek == &expect {
-            tokens.next();
-            return true;
-        }
-    }
-    false
 }

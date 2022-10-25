@@ -1,9 +1,12 @@
 use crate::Binary;
 use crate::Register;
+use crate::MEMORY_SIZE;
 
 impl Register {
     pub fn new() -> Self {
-        Self { storage: [0; 34] }
+        let mut storage = [0; 34];
+        storage[Register::SP as usize] = MEMORY_SIZE as i32 - 1;
+        Self { storage }
     }
 
     pub fn get(&self, idx: Binary) -> Binary {

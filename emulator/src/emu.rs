@@ -412,7 +412,7 @@ pub fn memory_instruction(register: &mut Register, memory: &mut [Binary], code: 
         // Store Word
         0x2b => {
             let ii = II::decode(code);
-            let rs = register.get(ii.rs);
+            let rs = register.get(ii.rs) / 4;
             let im = ii.im / 4;
             memory[(rs + im) as usize] = register.get(ii.rt);
 

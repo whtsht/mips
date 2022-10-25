@@ -6,6 +6,7 @@ fn assert(fname: &str, expect: &str) {
     println!("Start compile");
     let input = format!("./tests/compile_to_emulate/{}", fname);
     let input = compile_from_path(input).unwrap();
+    println!("{}", input);
 
     println!("End compile\nStart assemble");
     let bin = assemble_to_u8_from_string(mips_assembler::Endian::Little, input).unwrap();
